@@ -19,6 +19,7 @@ SRC_PATH 		= $(shell echo $(SRC_DIRS) | tr -s " " "\n" | sort | uniq | tr -s "\n
 
 VPATH 			= $(SRC_PATH)
 INCLUDES		= $(patsubst %,-I%,$(subst :, ,$(VPATH)))
+INCLUDES	   +=  -Isrc/thirdparty/lthread
 
 all:lthread.so $(MAIN_EXEC) 
 .PHONY:all
