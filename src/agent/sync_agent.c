@@ -77,7 +77,7 @@ http_serv(void *arg)
     lthread_detach();
 
     inet_ntop(AF_INET, &cli_info->peer_addr.sin_addr, ipstr, INET_ADDRSTRLEN);
-    printf("Accepted connection on IP %s\n", ipstr);
+    //printf("Accepted connection on IP %s\n", ipstr);
 
     if ((buf = malloc(1024)) == NULL)
         return;
@@ -106,7 +106,7 @@ http_serv(void *arg)
         /* make an expensive call without blocking other coroutines */
       //  ret = fibonacci(55);
     //lthread_compute_end();
-    printf("Computation completed\n");
+    //printf("Computation completed\n");
     /* reply back to user */
     lthread_send(cli_info->fd, reply, strlen(reply), 0);
     lthread_close(cli_info->fd);
