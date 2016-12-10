@@ -1,5 +1,5 @@
 CC				= gcc
-CFLAGS			= -fPIC -shared
+CFLAGS			= 
 LIBS			= -lpthread
 
 OBJS			= lthread_compute.o \
@@ -17,10 +17,10 @@ SRC_PATH 		= $(shell echo $(SRC_DIRS) | tr -s " " "\n" | sort | uniq | tr -s "\n
 VPATH 			= $(SRC_PATH)
 INCLUDES		= $(patsubst %,-I%,$(subst :, ,$(VPATH)))
 
-LIB_LTHREAD		= liblthread.so
+LIB_LTHREAD		= liblthread.a
 
 all:$(OBJS)
-	$(CC) $(CFLAGS) $(LIBS) -O2 -o $(LIB_LTHREAD) $(OBJS)
+	ar rcs $(LIB_LTHREAD) $(OBJS)
 	@echo $(LIB_LTHREAD) is generated
 	-mkdir ../../../lib 
 	-cp $(LIB_LTHREAD) ../../../lib/
