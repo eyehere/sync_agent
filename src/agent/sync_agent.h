@@ -16,9 +16,10 @@
 
 #ifndef _SYNC_AGENT_H_
 #define _SYNC_AGENT_H_
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 
-#include <lthread.h>
+#include "easy.h"
+#include "lthread.h"
+
+#include "sync_config.h"
+
 #endif

@@ -24,12 +24,17 @@
  */
 int 	_main_continue 	= 1;
 char	*_config_file	= CONFIG_FILE;
+sync_config_t *_config 	= NULL;
 
 /**
  * 静态函数申明区
  */
 static void show_help(const char *program);
 static void show_version(const char *program);
+static int parse_args(int argc, char **argv);
+static int create_daemon_process();
+static int  install_signals(void);
+static void signal_handle(int signum);
 
 static void show_help(const char *program)
 {
@@ -46,139 +51,185 @@ static void show_version(const char *program)
 	printf("%s, Version 1.0.0\n\n", program);
 }
 
-struct cli_info {
-    /* other stuff if needed*/
-    struct sockaddr_in peer_addr;
-    int fd;
-};
-
-typedef struct cli_info cli_info_t;
-
-char *reply = "HTTP/1.0 200 OK\r\nContent-length: 11\r\n\r\nHello Kannan";
-
-unsigned long long int
-fibonacci(unsigned long long int n)
+static int parse_args(int argc, char **argv)
 {
-    if (n == 0)
-        return 0;
-     if (n == 1)
+    int opt_char = 0;
+    int parsed   = 0;
+
+    if (argc == 1) {
+        parsed = 1;
+    }
+
+    while(-1 != (opt_char = getopt(argc, argv, "c:vh"))){
+        parsed = 1;
+
+        switch(opt_char){
+            case 'c':
+                _config_file = optarg;
+                break;
+            case 'v':
+                show_version(argv[0]);
+                exit(0);
+            case 'h':
+                show_help(argv[0]);
+                exit(0);
+            case '?':
+            case ':':
+            default:
+                log_error("unknown arg: %c.", opt_char);
+                show_help(argv[0]);
+                return 0;
+        }
+    }
+
+    if (parsed) {
         return 1;
-
-     return fibonacci(n - 1) + fibonacci(n - 2);
+    }
+    else {
+        log_error("unknown arg.");
+        show_help(argv[0]);
+        return 0;
+    }
 }
 
-void
-http_serv(void *arg)
+static int create_daemon_process()
 {
-    cli_info_t *cli_info = arg;
-    char *buf = NULL;
-    unsigned long long int ret = 0;
-    char ipstr[INET6_ADDRSTRLEN];
-    lthread_detach();
+    pid_t pid = 0;
+    int   fd  = -1;
 
-    inet_ntop(AF_INET, &cli_info->peer_addr.sin_addr, ipstr, INET_ADDRSTRLEN);
-    //printf("Accepted connection on IP %s\n", ipstr);
-
-    if ((buf = malloc(1024)) == NULL)
-        return;
-
-    /* read data from client or timeout in 5 secs */
-    ret = lthread_recv(cli_info->fd, buf, 1024, 0, 5000);
-
-    /* did we timeout before the user has sent us anything? */
-    if (ret == -2) {
-        lthread_close(cli_info->fd);
-        free(buf);
-        free(arg);
-        return;
+    pid = fork();
+    /* 创建进程错误 */
+    if (pid < 0) {
+        return 0;
     }
-
-    /*
-     *  Run an expensive computation without blocking other lthreads.
-     *  lthread_compute_begin() will yield http_serv coroutine and resumes
-     *  it in a compute scheduler that runs in a pthread. If a compute scheduler
-     *  is already available and free it will be used otherwise a compute scheduler
-     *  is created and launched in a new pthread. After the compute scheduler
-     *  resumes the lthread it will wait 60 seconds for a new job and dies after 60
-     *  of inactivity.
-     */
-    //lthread_compute_begin();
-        /* make an expensive call without blocking other coroutines */
-      //  ret = fibonacci(55);
-    //lthread_compute_end();
-    //printf("Computation completed\n");
-    /* reply back to user */
-    lthread_send(cli_info->fd, reply, strlen(reply), 0);
-    lthread_close(cli_info->fd);
-    free(buf);
-    free(arg);
-}
-
-void
-listener(lthread_t *lt, void *arg)
-{
-    int cli_fd = 0;
-    int lsn_fd = 0;
-    int opt = 1;
-    int ret = 0;
-    struct sockaddr_in peer_addr = {};
-    struct   sockaddr_in sin = {};
-    socklen_t addrlen = sizeof(peer_addr);
-    lthread_t *cli_lt = NULL;
-    cli_info_t *cli_info = NULL;
-    char ipstr[INET6_ADDRSTRLEN];
-
-    DEFINE_LTHREAD;
-
-    /* create listening socket */
-    lsn_fd = lthread_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (lsn_fd == -1)
-        return;
-
-    if (setsockopt(lsn_fd, SOL_SOCKET, SO_REUSEADDR, &opt,sizeof(int)) == -1)
-        perror("failed to set SOREUSEADDR on socket");
-
-    sin.sin_family = PF_INET;
-    sin.sin_addr.s_addr = INADDR_ANY;
-    sin.sin_port = htons(3128);
-
-    /* bind to the listening port */
-    ret = bind(lsn_fd, (struct sockaddr *)&sin, sizeof(sin));
-    if (ret == -1) {
-        perror("Failed to bind on port 3128");
-        return;
+    /* 父进程 */
+    else if (pid > 0) {
+        sync_config_free(_config);
+        exit(0);
     }
-
-    printf("Starting listener on 3128\n");
-
-    listen(lsn_fd, 128);
-
-    while (1) {
-        /* block until a new connection arrives */
-        cli_fd = lthread_accept(lsn_fd, (struct sockaddr*)&peer_addr, &addrlen);
-        if (cli_fd == -1) {
-            perror("Failed to accept connection");
-            return;
+    /* 子进程 */
+    else {
+        /* 脱离原始会话 */
+        if (setsid() == -1) {
+            log_error("setsid failed.");
+            return 0;
         }
 
-        if ((cli_info = malloc(sizeof(cli_info_t))) == NULL) {
-            close(cli_fd);
-            continue;
+        /* 修改工作目录 */
+        chdir("/");
+
+        /* 重设掩码 */
+        umask(0);
+
+        fd = open("/dev/null", O_RDWR);
+        if (fd == -1) {
+            log_error("open /dev/null failed.");
+            return 0;
         }
-        cli_info->peer_addr = peer_addr;
-        cli_info->fd = cli_fd;
-        /* launch a new lthread that takes care of this client */
-        ret = lthread_create(&cli_lt, http_serv, cli_info);
+
+        /* 重定向子进程的标准输入到null设备 */
+        if (dup2(fd, STDIN_FILENO) == -1) {
+            log_error("dup2 STDIN to fd failed.");
+            return 0;
+        }
+
+        /* 重定向子进程的标准输出到null设备 */
+        if (dup2(fd, STDOUT_FILENO) == -1) {
+            log_error("dup2 STDOUT to fd failed.");
+            return 0;
+        }
+
+        /* 重定向子进程的标准错误到null设备 */
+        if (dup2(fd, STDERR_FILENO) == -1) {
+            log_error("dup2 STDERR to fd failed.");
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int install_signals(void){
+    if(SIG_ERR == signal(SIGINT, signal_handle)){
+        log_error("Install SIGINT fails.");
+        return 0;
+    }
+    if(SIG_ERR == signal(SIGTERM, signal_handle)){
+        log_error("Install SIGTERM fails.");
+        return 0;
+    }
+    if(SIG_ERR == signal(SIGSEGV, signal_handle)){
+        log_error("Install SIGSEGV fails.");
+        return 0;
+    }
+    if(SIG_ERR == signal(SIGBUS, signal_handle)){
+        log_error("Install SIGBUS fails.");
+        return 0;
+    }
+    if(SIG_ERR == signal(SIGQUIT, signal_handle)){
+        log_error("Install SIGQUIT fails.");
+        return 0;
+    }
+    if(SIG_ERR == signal(SIGCHLD, signal_handle)){
+        log_error("Install SIGCHLD fails.");
+        return 0;
+    }
+
+    return 1;
+}
+
+static void signal_handle(int signum){
+    if(SIGTERM == signum){
+        log_info("recv kill signal, sync_agent will exit normally.");
+        _main_continue = 0;
+    }
+    else if(SIGINT == signum){
+        log_info("recv CTRL-C signal, sync_agent will exit normally.");
+        _main_continue = 0;
+    }
+    else if(SIGCHLD == signum){
+        log_debug("recv SIGCHLD signal[%d].", signum);
+    }
+    else{
+        log_info("receive signal: %d", signum);
+        exit(0);
     }
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-    lthread_t *lt = NULL;
+	if (!parse_args(argc, argv)) {
+	    return -1;
+	}
 
-    lthread_create(&lt, listener, NULL);
-    lthread_run();
+	_config = sync_config_load(_config_file);
+	if (NULL == _config) {
+	    return -1;
+	}
+	log_set_level(_config->log_level);
 
-    return 0;
+	if (LOG_DST_FILE == _config->log_dst) {
+		if (!log_set_file(_config->log_file)) {
+	        log_error("log_set_file failed.");
+	        return -1;
+	    }
+	}
+
+	sync_config_dump(_config);
+
+	if (_config->daemon) {
+	    log_info("create daemon process.");
+	    if (!create_daemon_process()) {
+	        log_error("create daemon process failed.");
+	        return -1;
+	    }
+	}
+
+	install_signals();
+
+	while (_main_continue) {
+
+	}
+
+	return 0;
 }
