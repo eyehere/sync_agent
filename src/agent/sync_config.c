@@ -50,6 +50,14 @@ void sync_config_free(sync_config_t *config)
         free(config->log_file);
     }
 
+    if (config->source_ip) {
+    	free(config->source_ip);
+    }
+
+    if (config->sync_path) {
+    	free(config->sync_path);
+    }
+
     free(config);
 }
 
@@ -99,6 +107,27 @@ static int sync_config_item_handler(char *key, char *value, void *userp)
         bzero(config->log_file, strlen(value) + 1);
         strcpy(config->log_file, value);
     }
+    else if (0 == strcasecmp(key, "source_ip")) {
+    	config->source_ip = (char *)malloc(strlen(value) + 1);
+    	if ( NULL == config->source_ip ) {
+    		log_error("malloc memory for config->source_ip error.");
+    		return 0;
+    	}
+    	bzero(config->source_ip, strlen(value) + 1);
+    	strcpy(config->source_ip, value);
+    }
+    else if (0 == strcasecmp(key, "port")) {
+    	config->port = atoi(value);
+    }
+    else if (0 == strcasecmp(key, "sync_path")) {
+    	config->sync_path = (char*)malloc(strlen(value) + 1);
+    	if (NULL == config->sync_path) {
+    		log_error("malloc memory for config->sync_path error.");
+    		return 0;
+    	}
+    	bzero(config->sync_path, strlen(value) + 1);
+    	strcpy(config->sync_path, value);
+    }
     else{
         log_error("unknown config, %s: %s.", key, value);
         return 0;
@@ -115,6 +144,9 @@ void sync_config_dump(sync_config_t *config)
     printf("%-30s%s\n",   "log_level: ",              log_level_str(config->log_level));
     printf("%-30s%s\n",   "log_dst: ",                log_dst_strs[config->log_dst]);
     printf("%-30s%s\n",   "log_file: ",               config->log_file);
+    printf("%-30s%s\n",   "source_ip: ",              config->source_ip);
+    printf("%-30s%d\n",   "port: ",                   config->port);
+    printf("%-30s%s\n",   "sync_path: ",              config->sync_path);
     printf("===========================================================\n");
 }
 
