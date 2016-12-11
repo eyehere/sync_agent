@@ -45,6 +45,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 #include <signal.h>
 #include <sys/un.h>
 #include <assert.h>

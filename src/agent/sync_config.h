@@ -28,6 +28,7 @@ typedef struct _sync_config_t {
     char  *source_ip;							 //源服务器IP
     int    port;								 //源服务器端口
     char  *sync_path;							 //同步目录
+    char  *address;                              //本机ipv4地址
 } sync_config_t;
 
 /**

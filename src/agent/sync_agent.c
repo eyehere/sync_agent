@@ -215,6 +215,14 @@ int main(int argc, char **argv)
 	    }
 	}
 
+	//获取本机的IPV4地址
+	_config->address = (char*)malloc(INET_ADDRSTRLEN+1);
+	bzero(_config->address, INET_ADDRSTRLEN+1);
+	int ret = get_ip("v4", _config->address);
+	if (ret != 0) {
+		log_error("get_ip address failed.");
+	}
+
 	sync_config_dump(_config);
 
 	if (_config->daemon) {
@@ -227,8 +235,11 @@ int main(int argc, char **argv)
 
 	install_signals();
 
-	while (_main_continue) {
-
+	if (0 == strcasecmp(_config->address, _config->source_ip)) {//Server模式
+		printf("server\n");
+	}
+	else {//Client模式
+		printf("client\n");
 	}
 
 	return 0;

@@ -5,7 +5,8 @@ LIBS			= -lpthread
 OBJS			= base/estring.o \
 				  base/elog.o \
 				  base/esyslog.o \
-				  base/eproperty.o			  
+				  base/eproperty.o	\
+				  base/eother.o		  
 				  
 SRCS			= $(patsubst %.o,%.c,$(OBJS))
 

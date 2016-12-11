@@ -23,7 +23,7 @@
 //#include "ememory.h"
 //#include "ebuffer.h"
 //#include "enetwork.h"
-//#include "eother.h"
+#include "eother.h"
 //#include "eprocess_lock.h"
 #include "eproperty.h"
 //#include "equeue.h"

@@ -58,6 +58,10 @@ void sync_config_free(sync_config_t *config)
     	free(config->sync_path);
     }
 
+    if (config->address) {
+    	free(config->address);
+    }
+
     free(config);
 }
 
@@ -147,6 +151,7 @@ void sync_config_dump(sync_config_t *config)
     printf("%-30s%s\n",   "source_ip: ",              config->source_ip);
     printf("%-30s%d\n",   "port: ",                   config->port);
     printf("%-30s%s\n",   "sync_path: ",              config->sync_path);
+    printf("%-30s%s\n",   "address: ",                config->address);
     printf("===========================================================\n");
 }
 
