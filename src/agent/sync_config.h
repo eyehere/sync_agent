@@ -25,10 +25,10 @@ typedef struct _sync_config_t {
     int    log_level;                            //日志级别
     int    log_dst;                              //日志输出方式，支持控制台，文件，syslog三种方式
     char  *log_file;                             //日志文件
-    char  *source_ip;							 //源服务器IP
+    char  *mode;							     //agent的工作模式(server|client)
     int    port;								 //源服务器端口
-    char  *sync_path;							 //同步目录
-    char  *address;                              //本机ipv4地址
+    char  *watch_path;							 //监测目录(server模式)
+    char  *subscribe_path;                       //订阅目录(client模式)
 } sync_config_t;
 
 /**

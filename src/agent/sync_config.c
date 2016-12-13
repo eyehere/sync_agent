@@ -50,16 +50,16 @@ void sync_config_free(sync_config_t *config)
         free(config->log_file);
     }
 
-    if (config->source_ip) {
-    	free(config->source_ip);
+    if (config->mode) {
+    	free(config->mode);
     }
 
-    if (config->sync_path) {
-    	free(config->sync_path);
+    if (config->watch_path) {
+    	free(config->watch_path);
     }
 
-    if (config->address) {
-    	free(config->address);
+    if (config->subscribe_path) {
+    	free(config->subscribe_path);
     }
 
     free(config);
@@ -111,27 +111,36 @@ static int sync_config_item_handler(char *key, char *value, void *userp)
         bzero(config->log_file, strlen(value) + 1);
         strcpy(config->log_file, value);
     }
-    else if (0 == strcasecmp(key, "source_ip")) {
-    	config->source_ip = (char *)malloc(strlen(value) + 1);
-    	if ( NULL == config->source_ip ) {
-    		log_error("malloc memory for config->source_ip error.");
+    else if (0 == strcasecmp(key, "mode")) {
+    	config->mode = (char *)malloc(strlen(value) + 1);
+    	if ( NULL == config->mode ) {
+    		log_error("malloc memory for config->mode error.");
     		return 0;
     	}
-    	bzero(config->source_ip, strlen(value) + 1);
-    	strcpy(config->source_ip, value);
+    	bzero(config->mode, strlen(value) + 1);
+    	strcpy(config->mode, value);
     }
     else if (0 == strcasecmp(key, "port")) {
     	config->port = atoi(value);
     }
-    else if (0 == strcasecmp(key, "sync_path")) {
-    	config->sync_path = (char*)malloc(strlen(value) + 1);
-    	if (NULL == config->sync_path) {
+    else if (0 == strcasecmp(key, "watch_path")) {
+    	config->watch_path = (char*)malloc(strlen(value) + 1);
+    	if (NULL == config->watch_path) {
     		log_error("malloc memory for config->sync_path error.");
     		return 0;
     	}
-    	bzero(config->sync_path, strlen(value) + 1);
-    	strcpy(config->sync_path, value);
+    	bzero(config->watch_path, strlen(value) + 1);
+    	strcpy(config->watch_path, value);
     }
+    else if (0 == strcasecmp(key, "subscribe_path")) {
+        	config->subscribe_path = (char*)malloc(strlen(value) + 1);
+        	if (NULL == config->subscribe_path) {
+        		log_error("malloc memory for config->subscribe_path error.");
+        		return 0;
+        	}
+        	bzero(config->subscribe_path, strlen(value) + 1);
+        	strcpy(config->subscribe_path, value);
+        }
     else{
         log_error("unknown config, %s: %s.", key, value);
         return 0;
@@ -148,10 +157,10 @@ void sync_config_dump(sync_config_t *config)
     printf("%-30s%s\n",   "log_level: ",              log_level_str(config->log_level));
     printf("%-30s%s\n",   "log_dst: ",                log_dst_strs[config->log_dst]);
     printf("%-30s%s\n",   "log_file: ",               config->log_file);
-    printf("%-30s%s\n",   "source_ip: ",              config->source_ip);
+    printf("%-30s%s\n",   "mode: ",                   config->mode);
     printf("%-30s%d\n",   "port: ",                   config->port);
-    printf("%-30s%s\n",   "sync_path: ",              config->sync_path);
-    printf("%-30s%s\n",   "address: ",                config->address);
+    printf("%-30s%s\n",   "watch_path: ",             config->watch_path);
+    printf("%-30s%s\n",   "subscribe_path: ",         config->subscribe_path);
     printf("===========================================================\n");
 }
 

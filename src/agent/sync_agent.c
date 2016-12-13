@@ -17,7 +17,7 @@
 #include "sync_agent.h"
 
 #define WORK_DIR "./"
-#define CONFIG_FILE WORK_DIR"conf/sync_agent.conf"
+#define CONFIG_FILE WORK_DIR"conf/sync_server.conf"
 
 /**
  * 全局变量申明区
@@ -215,14 +215,6 @@ int main(int argc, char **argv)
 	    }
 	}
 
-	//获取本机的IPV4地址
-	_config->address = (char*)malloc(INET_ADDRSTRLEN+1);
-	bzero(_config->address, INET_ADDRSTRLEN+1);
-	int ret = get_ip("v4", _config->address);
-	if (ret != 0) {
-		log_error("get_ip address failed.");
-	}
-
 	sync_config_dump(_config);
 
 	if (_config->daemon) {
@@ -235,7 +227,7 @@ int main(int argc, char **argv)
 
 	install_signals();
 
-	if (0 == strcasecmp(_config->address, _config->source_ip)) {//Server模式
+	if (0 == strcasecmp(_config->mode, "server")) {//Server模式
 		printf("server\n");
 	}
 	else {//Client模式

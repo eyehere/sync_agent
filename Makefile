@@ -8,7 +8,7 @@ CFLAGS_DEBUG	=
 MAIN_EXEC		= sync_agent
 
 SRC_DIR			= src
-LIBS			= -Llib -lpthread -llthread -leasy
+LIBS			= -Llib -lpthread -llthread -leasy -lhashset -lhashmap
 
 OBJS			= $(SRC_DIR)/agent/sync_agent.o \
 				  $(SRC_DIR)/agent/sync_config.o
@@ -21,12 +21,14 @@ SRC_PATH 		= $(shell echo $(SRC_DIRS) | tr -s " " "\n" | sort | uniq | tr -s "\n
 VPATH 			= $(SRC_PATH)
 INCLUDES		= $(patsubst %,-I%,$(subst :, ,$(VPATH)))
 INCLUDES	   +=  -Isrc/thirdparty/lthread \
+				   -Isrc/thirdparty/hashset \
+				   -Isrc/thirdparty/hashmap \
 				   -Isrc/core/base
 
-all:lthread.a libeasy.a $(MAIN_EXEC) 
+all:lthread.a libeasy.a libhashset.a libhashmap.a $(MAIN_EXEC) 
 .PHONY:all
 
-debug:lthread.a libeasy.a $(MAIN_EXEC)_debug 
+debug:lthread.a libeasy.a libhashset.a libhashmap.a $(MAIN_EXEC)_debug 
 .PHONY:debug
 
 lthread.a:
@@ -35,6 +37,12 @@ lthread.a:
 libeasy.a:
 	make -C src/core
 
+libhashset.a:
+	make -C src/thirdparty/hashset
+	
+libhashmap.a:
+	make -C src/thirdparty/hashmap
+		
 $(MAIN_EXEC):$(OBJS)
 	$(CC) $(CFLAGS) -O2 -o $(MAIN_EXEC) $(OBJS) $(LIBS)
 	-mkdir logs
@@ -52,6 +60,8 @@ $(OBJS):%.o:%.c
 clean:
 	make -C src/thirdparty/lthread clean
 	make -C src/core clean
+	make -C src/thirdparty/hashset clean
+	make -C src/thirdparty/hashmap clean
 	-rm $(OBJS)
 	-rm $(MAIN_EXEC)
 	-rm -rf logs
