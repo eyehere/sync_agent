@@ -234,7 +234,7 @@ int main(int argc, char **argv)
 		printf("client\n");
 	}
 	else {
-		printf("not found\n");
+		printf("sync_agent run mode is server or client,please check.\n");
 	}
 
 	return 0;

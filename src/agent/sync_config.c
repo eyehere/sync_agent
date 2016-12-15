@@ -1,9 +1,18 @@
 /*
- * sync_config.c
- *
- *  Created on: 2016年12月11日
- *      Author: luweijun
- */
+  +----------------------------------------------------------------------+
+  | sync_agent                                                           |
+  +----------------------------------------------------------------------+
+  | this source file is subject to version 2.0 of the apache license,    |
+  | that is bundled with this package in the file license, and is        |
+  | available through the world-wide-web at the following url:           |
+  | http://www.apache.org/licenses/license-2.0.html                      |
+  | if you did not receive a copy of the apache2.0 license and are unable|
+  | to obtain it through the world-wide-web, please send a note to       |
+  | yiming_6weijun@163.com so we can mail you a copy immediately.        |
+  +----------------------------------------------------------------------+
+  | author: weijun lu  <yiming_6weijun@163.com>                          |
+  +----------------------------------------------------------------------+
+*/
 
 #include "easy.h"
 #include "sync_config.h"
@@ -174,26 +183,25 @@ static hashset_t watch_set_handler(char *watch_path)
 	}
 
 	hashset_t watch_set = hashset_create();
-	char *from = watch_path;
-	while ( *watch_path != '\0' ) {
-		if ( *watch_path == ',' ) {
-			int len = watch_path - from;
-			char *element = (char*)malloc(len+1);
-			bzero(element, len);
-			strncpy(element, from, len);
-			hashset_add(watch_set, element);
-			from = watch_path+1;
+	char *last = watch_path;
+	char *end  = watch_path + strlen(watch_path);
+	char *pos = strstr(last,",");
+	while( pos != end || pos == NULL ) {
+		if (pos == NULL) {
+			pos = end;
 		}
-		watch_path++;
-	}
-
-	if ( from != watch_path ) {
-		int len = watch_path - from;
+		int len       = pos - last;
 		char *element = (char*)malloc(len+1);
 		bzero(element, len);
-		strncpy(element, from, len);
+		strncpy(element, last, len);
 		hashset_add(watch_set, element);
+
+		if (pos != end) {
+			last = pos+1;
+			pos = strstr(last,",");
+		}
 	}
+
 	return watch_set;
 }
 
@@ -218,45 +226,41 @@ static hashmap_t* subscribe_map_handler(char *subscribe_path)
 	char *end  = subscribe_path + strlen(subscribe_path);
 
 	char *pos = strstr(last,",");
-	while ( NULL != pos || end > last ) {
-		char *path_begin = strstr(last,":");
+	while ( NULL != pos || end != last ) {
+		if (last == end) break;
+		if (NULL == pos) pos = end;
 
+		char *path_begin = strstr(last,":");
 		char *host = (char*)malloc(path_begin - last);
 		strncpy(host, last, path_begin - last);
 		*(host + (path_begin - last)) = '\0';
+		hashset_t path_set = (hashset_t)hashmap_find(subscribe_map, (void*)host);
+		if (NULL == path_set) {
+			path_set = hashset_create();
+		}
 
-		hashset_t path_set = hashset_create();
-
+		path_begin++;
 		char *path_pos = strstr(path_begin, "|");
 		while( NULL != path_pos && path_pos < pos ) {
-			path_begin++;
 			char *path = (char*)malloc(path_pos - path_begin);
 			strncpy(path, path_begin, (path_pos - path_begin));
 			*(path + (path_pos - path_begin)) = '\0';
-
 			hashset_add(path_set, path);
 			path_begin = path_pos + 1;
 			path_pos = strstr(path_begin, "|");
 		}
 
 		if ( NULL == path_pos || path_pos > pos ) {
-			if (NULL == pos) {
-				path_pos = end;
-			} else {
-				path_pos = pos;
-			}
-			path_begin++;
+			path_pos = pos;
 			char *path = (char*)malloc(path_pos - path_begin);
 			strncpy(path, path_begin, (path_pos - path_begin));
 			*(path + (path_pos - path_begin)) = '\0';
-
 			hashset_add(path_set, path);
-			path_begin = path_pos + 1;
 		}
 
 		hashmap_add(subscribe_map, host, path_set);
 
-		if (NULL == pos) {
+		if (pos == end) {
 			last = end;
 		} else {
 			last = pos + 1;
