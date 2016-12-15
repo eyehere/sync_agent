@@ -31,8 +31,8 @@ hashset_itr_t hashset_iterator(hashset_t set)
   itr->index = 0;
 
   /* advance to the first item if one is present */
-  if (set->nitems > 0)
-    hashset_iterator_next(itr);
+  //if (set->nitems > 0)
+    //hashset_iterator_next(itr);
 
   return itr;
 }

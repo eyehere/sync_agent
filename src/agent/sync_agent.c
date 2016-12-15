@@ -230,8 +230,11 @@ int main(int argc, char **argv)
 	if (0 == strcasecmp(_config->mode, "server")) {//Server模式
 		printf("server\n");
 	}
-	else {//Client模式
+	else if (0 == strcasecmp(_config->mode, "client")) {//Client模式
 		printf("client\n");
+	}
+	else {
+		printf("not found\n");
 	}
 
 	return 0;
