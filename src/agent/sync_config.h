@@ -22,8 +22,7 @@
 
 #define HASHMAP_NODES 1024
 
-#include "hashset.h"
-#include "hashset_itr.h"
+#include "set.h"
 #include "hashmap.h"
 
 typedef struct _sync_config_t {
@@ -35,8 +34,9 @@ typedef struct _sync_config_t {
     int                 port;            //源服务器端口
     char               *watch_path;      //监测目录(server模式)
     char               *subscribe_path;  //订阅目录(client模式)
-    struct hashset_st  *watch_set;       //监测目录(server模式set集合)
+    simple_set         *watch_set;       //监测目录(server模式set集合)
     hashmap_t          *subscribe_map;   //订阅目录(client模式hashmap)
+    simple_set         *server_list;     //一组同步服务的server list
 } sync_config_t;
 
 /**

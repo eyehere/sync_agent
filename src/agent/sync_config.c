@@ -20,7 +20,7 @@
 static char *log_dst_strs[] = {"console", "file", "syslog"};
 
 static int sync_config_item_handler(char *key, char *value, void *userp);
-static hashset_t watch_set_handler(char *watch_path);
+static simple_set* watch_set_handler(char *watch_path);
 static hashmap_t* subscribe_map_handler(char *subscribe_path);
 void watch_set_free(void *data);
 
@@ -76,11 +76,17 @@ void sync_config_free(sync_config_t *config)
     }
 
     if (config->watch_set) {
-    	watch_set_free(config->watch_set);
+    	set_destroy(config->watch_set);
+    	free(config->watch_set);
     }
 
     if (config->subscribe_map) {
     	hashmap_delete(config->subscribe_map);
+    }
+
+    if (config->server_list) {
+    	set_destroy(config->server_list);
+    	free(config->server_list);
     }
 
     free(config);
@@ -168,6 +174,10 @@ static int sync_config_item_handler(char *key, char *value, void *userp)
         	config->subscribe_map = subscribe_map_handler(config->subscribe_path);
         }
     }
+    else if (0 == strcasecmp(key, "server_list")) {
+    	char *servers = (char*)value;
+    	config->server_list = watch_set_handler(servers);
+    }
     else{
         log_error("unknown config, %s: %s.", key, value);
         return 0;
@@ -176,13 +186,14 @@ static int sync_config_item_handler(char *key, char *value, void *userp)
     return 1;
 }
 
-static hashset_t watch_set_handler(char *watch_path)
+static simple_set* watch_set_handler(char *watch_path)
 {
 	if ( NULL == watch_path ) {
 		return NULL;
 	}
 
-	hashset_t watch_set = hashset_create();
+	simple_set *watch_set = (simple_set *)malloc(sizeof(simple_set));
+	set_init(watch_set);
 	char *last = watch_path;
 	char *end  = watch_path + strlen(watch_path);
 	char *pos = strstr(last,",");
@@ -191,11 +202,11 @@ static hashset_t watch_set_handler(char *watch_path)
 			pos = end;
 		}
 		int len       = pos - last;
-		char *element = (char*)malloc(len+1);
+		char element[len];
 		bzero(element, len);
 		strncpy(element, last, len);
-		hashset_add(watch_set, element);
-
+		*(element+len) = '\0';
+		set_add(watch_set, element);
 		if (pos != end) {
 			last = pos+1;
 			pos = strstr(last,",");
@@ -207,15 +218,9 @@ static hashset_t watch_set_handler(char *watch_path)
 
 void watch_set_free(void *data)
 {
-	hashset_t watch_set = (hashset_t)data;
-	hashset_itr_t watch_itr = hashset_iterator(watch_set);
-	while (hashset_iterator_has_next(watch_itr)) {
-	    char *watch_path = (char*)hashset_iterator_value(watch_itr);
-	    free(watch_path);
-	    hashset_iterator_next(watch_itr);
-	}
-	hashset_destroy(watch_set);
-	free(watch_itr);
+	simple_set *watch_set = (simple_set*)data;
+	set_destroy(watch_set);
+	free(watch_set);
 }
 
 static hashmap_t* subscribe_map_handler(char *subscribe_path)
@@ -234,28 +239,31 @@ static hashmap_t* subscribe_map_handler(char *subscribe_path)
 		char *host = (char*)malloc(path_begin - last);
 		strncpy(host, last, path_begin - last);
 		*(host + (path_begin - last)) = '\0';
-		hashset_t path_set = (hashset_t)hashmap_find(subscribe_map, (void*)host);
+		simple_set *path_set = (simple_set *)hashmap_find(subscribe_map, (void*)host);
 		if (NULL == path_set) {
-			path_set = hashset_create();
+			path_set = (simple_set *)malloc(sizeof(simple_set));
+			set_init(path_set);
 		}
 
 		path_begin++;
 		char *path_pos = strstr(path_begin, "|");
 		while( NULL != path_pos && path_pos < pos ) {
-			char *path = (char*)malloc(path_pos - path_begin);
-			strncpy(path, path_begin, (path_pos - path_begin));
-			*(path + (path_pos - path_begin)) = '\0';
-			hashset_add(path_set, path);
+			int len = path_pos - path_begin;
+			char path[len];
+			strncpy(path, path_begin, len);
+			*(path + len) = '\0';
+			set_add(path_set, path);
 			path_begin = path_pos + 1;
 			path_pos = strstr(path_begin, "|");
 		}
 
 		if ( NULL == path_pos || path_pos > pos ) {
 			path_pos = pos;
-			char *path = (char*)malloc(path_pos - path_begin);
-			strncpy(path, path_begin, (path_pos - path_begin));
-			*(path + (path_pos - path_begin)) = '\0';
-			hashset_add(path_set, path);
+			int len = path_pos - path_begin;
+			char path[len];
+			strncpy(path, path_begin, len);
+			*(path + len) = '\0';
+			set_add(path_set, path);
 		}
 
 		hashmap_add(subscribe_map, host, path_set);
@@ -286,29 +294,50 @@ void sync_config_dump(sync_config_t *config)
     printf("%-30s\n",     "watch_set:");
 
     if ( config->watch_set != NULL ) {
-    	hashset_itr_t watch_itr = hashset_iterator(config->watch_set);
-    	while (hashset_iterator_has_next(watch_itr)) {
-    		char *watch_path = (char*)hashset_iterator_value(watch_itr);
-    		printf("%-10s%s\n",   " ", watch_path);
-    		hashset_iterator_next(watch_itr);
+    	int index = 0;
+    	while ( index < config->watch_set->number_nodes ) {
+    		simple_set_node *watch_node = config->watch_set->nodes[index];
+    		if (watch_node != NULL) {
+    			char *watch_path = watch_node->_key;
+    			printf("%-10s%s\n",   " ", watch_path);
+    		}
+    		index++;
     	}
-    	free(watch_itr);
     }
+
     printf("%-30s\n",     "subscribe_map:");
     if (config->subscribe_map != NULL) {
     	hashmap_node_t *node = hashmap_findfirst(config->subscribe_map);
     	while (node != NULL) {
-    		printf("%-10s%s => \n",     " ", (char*)node->key);
-    		hashset_itr_t itr = hashset_iterator((hashset_t)node->data);
-    		while (hashset_iterator_has_next(itr)) {
-    			char *path = (char*)hashset_iterator_value(itr);
-    			printf("%-20s%s\n"," ", path);
-    			hashset_iterator_next(itr);
+    		char *host = (char*)node->key;
+    		printf("%-10s%s\n"," ", host);
+    		simple_set *subscibe_path = (simple_set*)node->data;
+    		int index = 0;
+    		while (index < subscibe_path->number_nodes) {
+    			simple_set_node *subscribe_node = subscibe_path->nodes[index];
+    			if (subscribe_node != NULL) {
+    				char *path = subscribe_node->_key;
+    				printf("%-20s%s\n"," ", path);
+    			}
+    			index++;
     		}
     		node = hashmap_findnext(config->subscribe_map);
-    		free(itr);
     	}
     }
+
+    printf("%-30s\n",     "watch_set:");
+
+	if ( config->server_list != NULL ) {
+		int index = 0;
+		while ( index < config->server_list->number_nodes ) {
+			simple_set_node *watch_node = config->server_list->nodes[index];
+			if (watch_node != NULL) {
+				char *server = watch_node->_key;
+				printf("%-10s%s\n",   " ", server);
+			}
+			index++;
+		}
+	}
     printf("===========================================================\n");
 }
 

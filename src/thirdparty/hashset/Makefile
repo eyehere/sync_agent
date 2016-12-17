@@ -3,7 +3,8 @@ CFLAGS			=
 LIBS			= 
 
 OBJS			= hashset.o \
-				  hashset_itr.o
+				  hashset_itr.o \
+				  set.o
 				  
 SRCS			= $(patsubst %.o,%.c,$(OBJS))
 
