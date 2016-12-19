@@ -16,9 +16,6 @@
 
 #include "sync_agent.h"
 
-#define WORK_DIR "./"
-#define CONFIG_FILE WORK_DIR"conf/sync_server.conf"
-
 /**
  * 全局变量申明区
  */
@@ -35,6 +32,8 @@ static int parse_args(int argc, char **argv);
 static int create_daemon_process();
 static int  install_signals(void);
 static void signal_handle(int signum);
+static void sync_server_run();
+static void synv_client_run();
 
 static void show_help(const char *program)
 {
@@ -196,6 +195,21 @@ static void signal_handle(int signum){
     }
 }
 
+static void sync_server_run()
+{
+	assert(sync_server_init() == 1);
+
+	lthread_t *listen_t = NULL;
+	lthread_create(&listen_t, sync_server_listen, NULL);
+	lthread_run();
+	sync_server_destroy();
+}
+
+static void sync_client_run()
+{
+	printf("client\n");
+}
+
 int main(int argc, char **argv)
 {
 	if (!parse_args(argc, argv)) {
@@ -227,14 +241,19 @@ int main(int argc, char **argv)
 
 	install_signals();
 
-	if (0 == strcasecmp(_config->mode, "server")) {//Server模式
-		printf("server\n");
+	char ip[32];
+	assert(get_ip("v4", ip) == 1);
+	if (0 == strcasecmp(_config->mode, "server") ||
+		set_contains(_config->server_list, ip) == SET_TRUE ) {//Server模式
+		sync_server_run();
 	}
-	else if (0 == strcasecmp(_config->mode, "client")) {//Client模式
-		printf("client\n");
+	else if (0 == strcasecmp(_config->mode, "client") ||
+			set_contains(_config->server_list, ip) != SET_TRUE ) {//Client模式
+		sync_client_run();
 	}
 	else {
 		printf("sync_agent run mode is server or client,please check.\n");
+		printf("local ip:%s\n", ip);
 	}
 
 	return 0;

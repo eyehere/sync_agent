@@ -11,7 +11,8 @@ SRC_DIR			= src
 LIBS			= -Llib -lpthread -llthread -leasy -lhashset -lhashmap
 
 OBJS			= $(SRC_DIR)/agent/sync_agent.o \
-				  $(SRC_DIR)/agent/sync_config.o
+				  $(SRC_DIR)/agent/sync_config.o \
+				  $(SRC_DIR)/agent/sync_server.o
 
 SRCS			= $(patsubst %.o,%.c,$(OBJS))
 

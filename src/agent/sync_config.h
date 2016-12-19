@@ -22,9 +22,6 @@
 
 #define HASHMAP_NODES 1024
 
-#include "set.h"
-#include "hashmap.h"
-
 typedef struct _sync_config_t {
     int                 daemon;          //是否以daemon进程方式运行
     int                 log_level;       //日志级别

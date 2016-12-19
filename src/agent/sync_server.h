@@ -13,3 +13,40 @@
   | author: weijun lu  <yiming_6weijun@163.com>                          |
   +----------------------------------------------------------------------+
 */
+
+#ifndef _SYNC_SERVER_H_
+#define _SYNC_SERVER_H_
+
+#define HASHMAP_PATH_NODES 1024
+
+typedef struct _sync_server_t {
+	hashmap_t *path_ip_set;      //key是client要同步的path路径 value是ipSet
+} sync_server_t;
+
+/**
+ * 全局变量定义区
+ */
+extern sync_server_t *_server_t;
+
+/**
+ * sync_server 监听程序
+ * client 自动发现 & 接受同步文件请求
+ */
+void sync_server_listen(void *arg);
+
+/**
+ * sync_server 监控对应的目录的文件变化
+ */
+void sync_server_watch(void *arg);
+
+/**
+ * sync_server 初始化
+ */
+int sync_server_init();
+
+/**
+ * sync_server 销毁
+ */
+void sync_server_destroy();
+
+#endif

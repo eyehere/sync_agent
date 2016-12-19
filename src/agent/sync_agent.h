@@ -20,6 +20,21 @@
 #include "easy.h"
 #include "lthread.h"
 
+#include "set.h"
+#include "hashmap.h"
+
 #include "sync_config.h"
+#include "sync_server.h"
+
+#define WORK_DIR "./"
+#define CONFIG_FILE WORK_DIR"conf/sync_server.conf"
+
+
+/**
+ * 全局变量申明区
+ */
+extern int 	_main_continue;
+extern char	*_config_file;
+extern sync_config_t *_config;
 
 #endif
