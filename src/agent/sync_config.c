@@ -15,6 +15,8 @@
 */
 
 #include "easy.h"
+#include "set.h"
+#include "hashmap.h"
 #include "sync_config.h"
 
 static char *log_dst_strs[] = {"console", "file", "syslog"};

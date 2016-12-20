@@ -35,6 +35,32 @@ static void signal_handle(int signum);
 static void sync_server_run();
 static void synv_client_run();
 
+void lthread_log(int log_level, const char *fmt, ...)
+{
+	lthread_detach();
+	lthread_compute_begin();
+
+	va_list vl;
+	char line_buffer[LOG_BUFFER_SIZE]  = {0};
+	int  line_size = 0;
+
+	va_start(vl, fmt);
+	line_size = vsnprintf(line_buffer, sizeof(line_buffer) - 2, fmt, vl);
+	if(line_size <= 0){
+		return;
+	}
+	va_end(vl);
+
+	if ((unsigned int)line_size > sizeof(line_buffer) - 2) {
+		line_size = sizeof(line_buffer) - 2;
+	}
+	line_buffer[line_size] = '\0';
+	line_size++;
+
+	log_by_level(log_level, line_buffer);
+
+	lthread_compute_end();
+}
 static void show_help(const char *program)
 {
 	printf("Usage: %s [-c config_file]\n", program);
@@ -179,6 +205,10 @@ static int install_signals(void){
 
 static void signal_handle(int signum){
     if(SIGTERM == signum){
+        log_info("recv termination kill signal, sync_agent will exit normally.");
+        _main_continue = 0;
+    }
+    else if(SIGKILL == signum){
         log_info("recv kill signal, sync_agent will exit normally.");
         _main_continue = 0;
     }
@@ -202,6 +232,7 @@ static void sync_server_run()
 	lthread_t *listen_t = NULL;
 	lthread_create(&listen_t, sync_server_listen, NULL);
 	lthread_run();
+
 	sync_server_destroy();
 }
 

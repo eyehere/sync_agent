@@ -29,6 +29,7 @@
 #define WORK_DIR "./"
 #define CONFIG_FILE WORK_DIR"conf/sync_server.conf"
 
+#define LOG_BUFFER_SIZE   8096
 
 /**
  * 全局变量申明区
@@ -36,5 +37,15 @@
 extern int 	_main_continue;
 extern char	*_config_file;
 extern sync_config_t *_config;
+
+typedef struct _connection_s {
+	struct sockaddr_in cli_addr;
+	int fd;
+} _connection_t;
+
+/**
+ * 日志函数封装
+ */
+void lthread_log(int log_level, const char *fmt, ...);
 
 #endif
