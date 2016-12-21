@@ -59,9 +59,30 @@ static void ip_set_free(void *ip_set)
 
 static void client_connection_handler(void *arg)
 {
+	DEFINE_LTHREAD;
+	lthread_detach();
+
+	char *buf = NULL;
+	uint64_t ret = 0;
 	_connection_t *conn = (_connection_t*)arg;
 	char *ip = inet_ntoa(conn->cli_addr.sin_addr);
 	lthread_log(LOG_LEVEL_DEBUG, "ip[%s] fd[%d]", ip, conn->fd);
+
+	if ((buf = (char*)malloc(1024)) == NULL) {
+		lthread_log(LOG_LEVEL_ERROR, "client_connection_handler malloc buf error");
+		return;
+	}
+
+	ret = lthread_recv(conn->fd, buf, 1024, 0, 5000);
+	if (ret == -2) {
+		goto destroy;
+	}
+	printf("recv:[%s]\n", buf);
+	lthread_send(conn->fd, buf, strlen(buf), 0);
+destroy:
+	lthread_close(conn->fd);
+	free(buf);
+	free(arg);
 }
 
 void sync_server_listen( void *arg)
@@ -75,6 +96,8 @@ void sync_server_listen( void *arg)
 	struct sockaddr_in cli_addr = {};
 	socklen_t addr_len = sizeof(cli_addr);
 	lthread_t *cli_lt = NULL;
+
+	DEFINE_LTHREAD;
 
 	listen_fd = lthread_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listen_fd == -1) {
