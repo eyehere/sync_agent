@@ -93,7 +93,7 @@ static void client_connection_handler(void *arg)
 {
 	DEFINE_LTHREAD;
 	lthread_detach();
-	//printf("client_connection_handler:%d\n", _main_continue);
+
 	char *buf = NULL;
 	uint64_t ret = 0;
 	_connection_t *conn = (_connection_t*)arg;
@@ -112,7 +112,6 @@ static void client_connection_handler(void *arg)
 	//1.接收健康检查curl
 	//2.接收client的心跳和订阅信息
 	//3.接收客户端的对账信息
-	//printf("recv:[%s]\n", buf);
 	lthread_send(conn->fd, buf, strlen(buf), 0);
 destroy:
 	lthread_close(conn->fd);
@@ -120,31 +119,8 @@ destroy:
 	free(arg);
 }
 
-static void client_conn_dispatch(void *arg)
-{
-	while(_main_continue) {
-		if (queue_empty(conn_queue)) {
-			lthread_cond_wait(conn_cond, 0);
-		}
-
-		void* data = queue_pop(conn_queue);
-		if ( NULL == data ) {
-			continue;
-		}
-
-		lthread_t *handler_t = NULL;
-		int ret = lthread_create(&handler_t, client_connection_handler, data);
-	}
-}
-
 void sync_server_listen( void *arg)
 {
-/*
-	int listen_fd = 0;
-	int opt       = 1;
-	int ret       = 0;
-	struct sockaddr_in sin = {};
-*/
 	int listen_fd = *(int*)arg;
 	int cli_fd = 0;
 	struct sockaddr_in cli_addr = {};
@@ -152,30 +128,7 @@ void sync_server_listen( void *arg)
 	lthread_t *cli_lt = NULL;
 
 	DEFINE_LTHREAD;
-/*
-	listen_fd = lthread_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (listen_fd == -1) {
-		lthread_log(LOG_LEVEL_ERROR, "lthread_socket error. listen_fd[%d]", listen_fd);
-		return;
-	}
-	if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt ,sizeof(int)) == -1) {
-		lthread_log(LOG_LEVEL_ERROR, "setsockopt error:set reuseaddr error");
-		return;
-	}
 
-	sin.sin_family      = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
-	sin.sin_port        = htons(_config->port);
-
-	ret = bind(listen_fd, (struct sockaddr*)&sin, sizeof(sin));
-	if ( ret == -1) {
-		lthread_log(LOG_LEVEL_ERROR, "bind error port[%d]", _config->port);
-		return;
-	}
-
-	listen(listen_fd, 1024);
-	lthread_log(LOG_LEVEL_DEBUG, "sync_server started,listen on port[%d]", _config->port);
-*/
 	while (_main_continue) {
 		cli_fd = lthread_accept(listen_fd, (struct sockaddr*)&cli_addr, &addr_len);
 		if (cli_fd == -1) {
@@ -188,21 +141,8 @@ void sync_server_listen( void *arg)
 		cli_conn->cli_addr = cli_addr;
 		cli_conn->fd = cli_fd;
 
-		int ret = queue_push(conn_queue, (void*) cli_conn);
-
-		if ( ret == 0 ) {
-			lthread_log(LOG_LEVEL_ERROR, "sync_server lthread_accept queue_push error");
-			lthread_close(cli_conn->fd);
-			free(cli_conn);
-			continue;
-		}
-
-		lthread_cond_signal(conn_cond);
-
-
-		//lthread_t *handler_t = NULL;
-		//int ret = lthread_create(&handler_t, client_connection_handler, cli_conn);
-
+		lthread_t *handler_t = NULL;
+		lthread_create(&handler_t, client_connection_handler, cli_conn);
 	}
 }
 
@@ -210,15 +150,6 @@ static void* server_accept_loop(void *args)
 {
 	lthread_t *listen_t = NULL;
 	lthread_create(&listen_t, sync_server_listen, args);
-	lthread_run();
-
-	return 0;
-}
-
-static void* server_conn_loop(void *args)
-{
-	lthread_t *conn_handler_t = NULL;
-	lthread_create(&conn_handler_t, client_conn_dispatch, NULL);
 	lthread_run();
 
 	return 0;
@@ -256,14 +187,9 @@ void sync_server_start()
 
 	listen(listen_fd, 1024);
 	log_debug("sync_server started,listen on port[%d]", _config->port);
-/*
+
 	while (i++ < cpu_num) {
 		pthread_create(&ths[i], NULL, server_accept_loop, &listen_fd);
-	}
-*/
-	pthread_create(&ths[i], NULL, server_accept_loop, &listen_fd);
-	while (++i < cpu_num) {
-		pthread_create(&ths[i], NULL, server_conn_loop, NULL);
 	}
 
 	i=0;
