@@ -426,7 +426,8 @@ lthread_cond_signal(struct lthread_cond *c)
         return;
     TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
     _lthread_desched_sleep(lt);
-    TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
+    //TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
+    TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 }
 
 void
@@ -438,7 +439,8 @@ lthread_cond_broadcast(struct lthread_cond *c)
     TAILQ_FOREACH_SAFE(lt, &c->blocked_lthreads, cond_next, lttmp) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
         _lthread_desched_sleep(lt);
-        TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
+        //TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
+        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
     }
 }
 

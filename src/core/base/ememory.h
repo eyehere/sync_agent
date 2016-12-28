@@ -13,24 +13,21 @@
   | Author: Weijun Lu  <yiming_6weijun@163.com>                          |
   +----------------------------------------------------------------------+
 */
-#ifndef _EASY_H_
-#define _EASY_H_
-
+#ifndef _EMEMORY_H_
+#define _EMEMORY_H_
 #include "ecommon.h"
 
-#include "elog.h"
-//#include "emem_pool.h"
-//#include "ememory.h"
-//#include "ebuffer.h"
-//#include "enetwork.h"
-#include "eother.h"
-//#include "eprocess_lock.h"
-#include "eproperty.h"
-#include "equeue.h"
-//#include "eshm.h"
-#include "estring.h"
-#include "esyslog.h"
-//#include "ethread_pool.h"
-//#include "etime.h"
+#ifndef MALLOC_DEBUG
+#define MALLOC_WRAPPER(size) malloc(size)
+#else
+#define MALLOC_WRAPPER(size) malloc_wrapper(size)
+#endif
 
+/** 
+ *        Name: malloc_wrapper
+ * Description: 用来debug malloc用的.
+ *   Parameter: size -> 分配内存的大小.
+ *      Return: 分配的内存的首地址.
+ */
+void *malloc_wrapper(int size);
 #endif

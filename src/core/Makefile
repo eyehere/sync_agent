@@ -6,6 +6,8 @@ OBJS			= base/estring.o \
 				  base/elog.o \
 				  base/esyslog.o \
 				  base/eproperty.o	\
+				  base/ememory.o \
+				  base/equeue.o \
 				  base/eother.o		  
 				  
 SRCS			= $(patsubst %.o,%.c,$(OBJS))

@@ -228,11 +228,7 @@ static void signal_handle(int signum){
 static void sync_server_run()
 {
 	assert(sync_server_init() == 1);
-
-	lthread_t *listen_t = NULL;
-	lthread_create(&listen_t, sync_server_listen, NULL);
-	lthread_run();
-
+	sync_server_start();
 	sync_server_destroy();
 }
 

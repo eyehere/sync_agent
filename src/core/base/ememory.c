@@ -13,24 +13,11 @@
   | Author: Weijun Lu  <yiming_6weijun@163.com>                          |
   +----------------------------------------------------------------------+
 */
-#ifndef _EASY_H_
-#define _EASY_H_
+#include "ememory.h"
 
-#include "ecommon.h"
+void *malloc_wrapper(int size){
+    printf("call malloc function.\n");
+    return malloc(size);
+}
 
-#include "elog.h"
-//#include "emem_pool.h"
-//#include "ememory.h"
-//#include "ebuffer.h"
-//#include "enetwork.h"
-#include "eother.h"
-//#include "eprocess_lock.h"
-#include "eproperty.h"
-#include "equeue.h"
-//#include "eshm.h"
-#include "estring.h"
-#include "esyslog.h"
-//#include "ethread_pool.h"
-//#include "etime.h"
 
-#endif

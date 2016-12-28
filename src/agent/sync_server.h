@@ -27,6 +27,12 @@ typedef struct _sync_server_t {
  * 全局变量定义区
  */
 extern sync_server_t *_server_t;
+extern queue_t *conn_queue;
+
+/**
+ * sync_server启动
+ */
+void sync_server_start();
 
 /**
  * sync_server 监听程序
