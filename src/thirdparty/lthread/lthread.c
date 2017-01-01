@@ -231,7 +231,18 @@ _lthread_key_create(void)
 int
 lthread_init(size_t size)
 {
+    assert(pthread_once(&key_once, _lthread_key_create) == 0);
+    /*
+     * If multiple schedulers in different pthreads are running,
+     * initialize the key for each of them.
+     */
+    assert(pthread_setspecific(lthread_sched_key, NULL) == 0);
     return (sched_create(size));
+}
+
+/* Not sure if that's necessary, but it'll reside here for some time */
+void lthread_library_init(void) {
+    assert(pthread_once(&key_once, _lthread_key_create) == 0);
 }
 
 static void
@@ -257,6 +268,7 @@ _sched_free(struct lthread_sched *sched)
     close(sched->eventfd);
 #endif
     pthread_mutex_destroy(&sched->defer_mutex);
+    cfuhash_destroy(sched->waiting_multi);
 
     free(sched);
     pthread_setspecific(lthread_sched_key, NULL);
@@ -302,6 +314,7 @@ sched_create(size_t stack_size)
     TAILQ_INIT(&new_sched->ready);
     TAILQ_INIT(&new_sched->defer);
     LIST_INIT(&new_sched->busy);
+    new_sched->waiting_multi = cfuhash_new();
 
     bzero(&new_sched->ctx, sizeof(struct cpu_ctx));
 
@@ -329,10 +342,13 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
         return (errno);
     }
 
-    if (posix_memalign(&lt->stack, getpagesize(), sched->stack_size)) {
+    int ret = posix_memalign(&lt->stack, getpagesize(), sched->stack_size);
+    if (ret) {
         free(lt);
-        perror("Failed to allocate stack for new lthread");
-        return (errno);
+        fprintf(stderr,
+                "Failed to allocate stack %zu, pagesize %d for new lthread"
+                "(errno code %d)\n", sched->stack_size, getpagesize(), ret);
+        return (ret);
     }
 
     lt->sched = sched;
@@ -364,7 +380,8 @@ lthread_get_data(void)
 struct lthread*
 lthread_current(void)
 {
-    return (lthread_get_sched()->current_lthread);
+    struct lthread_sched *sched = lthread_get_sched();
+    return sched ? sched->current_lthread : NULL;
 }
 
 void
@@ -427,7 +444,6 @@ lthread_cond_signal(struct lthread_cond *c)
     TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
     _lthread_desched_sleep(lt);
     TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
-    //TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 }
 
 void
@@ -440,7 +456,6 @@ lthread_cond_broadcast(struct lthread_cond *c)
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
         _lthread_desched_sleep(lt);
         TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
-        //TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
     }
 }
 
@@ -528,12 +543,11 @@ lthread_detach2(struct lthread *lt)
     lt->state |= BIT(LT_ST_DETACH);
 }
 
-
 void
 lthread_set_funcname(const char *f)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    strncpy(lt->funcname, f, 64);
+    strncpy(lt->funcname, f, 64); /* FIXME at least with sizeof */
 }
 
 uint64_t
@@ -552,9 +566,9 @@ lthread_self(void)
  * convenience function for performance measurement.
  */
 void
-lthread_print_timestamp(char *msg)
+lthread_print_timestamp(const char *msg)
 {
-	struct timeval t1 = {0, 0};
+    struct timeval t1 = {0, 0};
     gettimeofday(&t1, NULL);
-	printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, (long) t1.tv_usec, msg);
+    printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, (long) t1.tv_usec, msg);
 }

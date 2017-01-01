@@ -34,7 +34,7 @@
 #include <netinet/tcp.h>
 #include <sys/types.h>
 #include <sys/uio.h>
-#include <assert.h>
+#include <string.h>
 
 #include <sys/socket.h>
 #include <fcntl.h>
@@ -48,6 +48,44 @@
     #define FLAG | MSG_NOSIGNAL
 #endif
 
+/* FIXME check for EWOULDBLOCK along with EAGAIN? */
+
+#ifdef LTHREAD_SOCKET_PASSTHROUGH
+/* let symbol-modified librarys work outside the lthread */
+#define LTHREAD_SOCKET_CHECK_SCHED(y)                       \
+    if (1) {                                                \
+        struct lthread_sched *sched = lthread_get_sched();  \
+        if (!sched || !sched->current_lthread)              \
+            return (y);                                     \
+    }
+#else
+#define LTHREAD_SOCKET_CHECK_SCHED(y)
+#endif
+
+/* obtain timeout from fd, if zero is given; critical for usage with openssl */
+#ifdef LTHREAD_TIMEOUT_FROM_SOCKET
+static inline uint64_t
+socket_get_timeout(int fd, int timeo_name, uint64_t timeo) {
+    if (timeo)
+        return timeo;
+
+    struct timeval tv;
+    socklen_t optlen = sizeof(tv);
+    if (getsockopt(fd, SOL_SOCKET, timeo_name, &tv, &optlen) == 0) {
+        return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
+    } else {
+        if (errno != ENOTSOCK)
+            perror("lthread getsockopt");
+        return 0;
+    }
+}
+
+#define LTHREAD_GET_SOCKET_TIMEOUT(fd, opt, t) \
+    socket_get_timeout(fd, opt, t)
+
+#else
+#define LTHREAD_GET_SOCKET_TIMEOUT(fd, opt, t) t
+#endif
 
 #define LTHREAD_WAIT(fn, event)                                 \
 fn                                                              \
@@ -61,21 +99,25 @@ fn                                                              \
     return (0);                                                 \
 }
 
-#define LTHREAD_RECV(x, y)                                  \
+#define LTHREAD_RECV(x, y, t)                               \
 x {                                                         \
+    LTHREAD_SOCKET_CHECK_SCHED(y);                          \
     ssize_t ret = 0;                                        \
     struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (1) {                                             \
         if (lt->state & BIT(LT_ST_FDEOF))                   \
-            return (-1);                                    \
+            return (0);                                     \
         _lthread_renice(lt);                                \
         ret = y;                                            \
         if (ret == -1 && errno != EAGAIN)                   \
             return (-1);                                    \
         if ((ret == -1 && errno == EAGAIN)) {               \
-            _lthread_sched_event(lt, fd, LT_EV_READ, timeout);  \
-            if (lt->state & BIT(LT_ST_EXPIRED))             \
-                return (-2);                                \
+            _lthread_sched_event(lt, fd, LT_EV_READ,        \
+            LTHREAD_GET_SOCKET_TIMEOUT(fd, SO_RCVTIMEO, t));   \
+            if (lt->state & BIT(LT_ST_EXPIRED)) {           \
+                errno = ETIMEDOUT;                          \
+                return (-1);                                \
+            }                                               \
         }                                                   \
         if (ret >= 0)                                       \
             return (ret);                                   \
@@ -90,7 +132,7 @@ x {                                                         \
                                                             \
     while (recvd != length) {                               \
         if (lt->state & BIT(LT_ST_FDEOF))                   \
-            return (-1);                                    \
+            return (0);                                     \
                                                             \
         _lthread_renice(lt);                                \
         ret = y;                                            \
@@ -101,23 +143,27 @@ x {                                                         \
         if (ret == -1 && errno != EAGAIN)                   \
             return (-1);                                    \
         if ((ret == -1 && errno == EAGAIN)) {               \
-            _lthread_sched_event(lt, fd, LT_EV_READ, timeout); \
-            if (lt->state & BIT(LT_ST_EXPIRED))             \
-                return (-2);                                \
+            _lthread_sched_event(lt, fd, LT_EV_READ, timeout);   \
+            if (lt->state & BIT(LT_ST_EXPIRED)) {           \
+                errno = ETIMEDOUT;                          \
+                return (-1);                                \
+            }                                               \
         }                                                   \
     }                                                       \
     return (recvd);                                         \
 }                                                           \
 
-
 #define LTHREAD_SEND(x, y)                                  \
 x {                                                         \
     ssize_t ret = 0;                                        \
     ssize_t sent = 0;                                       \
+    LTHREAD_SOCKET_CHECK_SCHED(y);                          \
     struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (sent != length) {                                \
-        if (lt->state & BIT(LT_ST_FDEOF))                   \
+        if (lt->state & BIT(LT_ST_FDEOF)) {                 \
+            errno = EPIPE;                                  \
             return (-1);                                    \
+        }                                                   \
         _lthread_renice(lt);                                \
         ret = y;                                            \
         if (ret == 0)                                       \
@@ -137,8 +183,10 @@ x {                                                         \
     ssize_t ret = 0;                                        \
     struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (1) {                                             \
-        if (lt->state & BIT(LT_ST_FDEOF))                   \
+        if (lt->state & BIT(LT_ST_FDEOF)) {                 \
+            errno = EPIPE;                                  \
             return (-1);                                    \
+        }                                                   \
         ret = y;                                            \
         if (ret >= 0)                                       \
             return (ret);                                   \
@@ -154,6 +202,7 @@ const struct linger nolinger = { .l_onoff = 1, .l_linger = 1 };
 int
 lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 {
+    LTHREAD_SOCKET_CHECK_SCHED(accept(fd, addr, len));
     int ret = -1;
     struct lthread *lt = lthread_get_sched()->current_lthread;
 
@@ -177,7 +226,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
         }
 
         if (ret == -1 && errno != EWOULDBLOCK) {
-            perror("Cannot accept connection");
+            fprintf(stderr, "Cannot accept connection on %d: %s\n", fd, strerror(errno));
             return (-1);
         }
 
@@ -197,6 +246,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 int
 lthread_close(int fd)
 {
+    LTHREAD_SOCKET_CHECK_SCHED(close(fd));
     struct lthread *lt = NULL;
 
     /* wake up the lthreads waiting on this fd and notify them of close */
@@ -228,6 +278,8 @@ lthread_socket(int domain, int type, int protocol)
         perror("Failed to create a new socket");
         return (-1);
     }
+
+    LTHREAD_SOCKET_CHECK_SCHED(fd);
 
     if ((fcntl(fd, F_SETFL, O_NONBLOCK)) == -1) {
         close(fd);
@@ -289,6 +341,8 @@ lthread_pipe(int fildes[2])
     if (ret != 0)
         return (ret);
 
+    LTHREAD_SOCKET_CHECK_SCHED(ret);
+
     ret = fcntl(fildes[0], F_SETFL, O_NONBLOCK);
     if (ret != 0)
         goto err;
@@ -311,12 +365,40 @@ LTHREAD_WAIT(int lthread_wait_write(int fd, int timeout_ms), LT_EV_WRITE);
 LTHREAD_RECV(
     ssize_t lthread_recv(int fd, void *buf, size_t length, int flags,
         uint64_t timeout),
-    recv(fd, buf, length, flags FLAG)
+    recv(fd, buf, length, flags FLAG),
+    timeout
 )
 
 LTHREAD_RECV(
-    ssize_t lthread_read(int fd, void *buf, size_t length, uint64_t timeout),
-    read(fd, buf, length)
+    ssize_t lthread_read(int fd, void *buf, size_t length,
+        uint64_t timeout),
+    read(fd, buf, length),
+    timeout
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_read_posix(int fd, void *buf, size_t length),
+    read(fd, buf, length),
+    0
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_recv_posix(int fd, void *buf, size_t length, int flags),
+    recv(fd, buf, length, flags FLAG),
+    0
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_recvmsg_posix(int fd, struct msghdr *message, int flags),
+    recvmsg(fd, message, flags FLAG),
+    0
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_recvfrom_posix(int fd, void *buf, size_t length, int flags,
+        struct sockaddr *address, socklen_t *address_len),
+    recvfrom(fd, buf, length, flags FLAG, address, address_len),
+    0
 )
 
 LTHREAD_RECV_EXACT(
@@ -334,13 +416,15 @@ LTHREAD_RECV_EXACT(
 LTHREAD_RECV(
     ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags,
         uint64_t timeout),
-    recvmsg(fd, message, flags FLAG)
+    recvmsg(fd, message, flags FLAG),
+    timeout
 )
 
 LTHREAD_RECV(
     ssize_t lthread_recvfrom(int fd, void *buf, size_t length, int flags,
         struct sockaddr *address, socklen_t *address_len, uint64_t timeout),
-    recvfrom(fd, buf, length, flags FLAG, address, address_len)
+    recvfrom(fd, buf, length, flags FLAG, address, address_len),
+    timeout
 )
 
 LTHREAD_SEND(
@@ -364,11 +448,41 @@ LTHREAD_SEND_ONCE(
     sendto(fd, buf, length, flags FLAG, dest_addr, dest_len)
 )
 
-int
-lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
+
+/*
+ssize_t lthread_write(int fd, const void *buf, size_t length)
+{                                                       
+    ssize_t ret = 0;                                      
+    ssize_t sent = 0;                                     
+    LTHREAD_SOCKET_CHECK_SCHED(write(fd, ((char *)buf) + sent, length - sent));
+    struct lthread *lt = lthread_get_sched()->current_lthread;
+    while (sent != length) {                              
+        if (lt->state & BIT(LT_ST_FDEOF)) {
+            errno = EPIPE;
+            return (-1);
+        }
+        _lthread_renice(lt);                              
+        ret = write(fd, ((char *)buf) + sent, length - sent);
+        if (ret == 0)                                     
+            return (sent);                                
+        if (ret > 0)                                      
+            sent += ret;                                  
+        if (ret == -1 && errno != EAGAIN)                 
+            return (-1);                                  
+        if (ret == -1 && errno == EAGAIN)                 
+            _lthread_sched_event(lt, fd, LT_EV_WRITE, 0); 
+    }                                                     
+    return (sent);                                        
+}                                                         
+*/
+
+
+
+static inline int
+_lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
     uint64_t timeout)
 {
-
+    LTHREAD_SOCKET_CHECK_SCHED(connect(fd, name, namelen));
     int ret = 0;
     struct lthread *lt = lthread_get_sched()->current_lthread;
 
@@ -381,9 +495,11 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
             errno == EWOULDBLOCK ||
             errno == EINPROGRESS)) {
             _lthread_sched_event(lt, fd, LT_EV_WRITE, timeout);
-            if (lt->state & BIT(LT_ST_EXPIRED))
-                return (-2);
-            
+            if (lt->state & BIT(LT_ST_EXPIRED)) {
+                errno = ETIMEDOUT;
+                return (-1);
+            }
+
             continue;
         } else {
             break;
@@ -393,9 +509,23 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
     return (ret);
 }
 
+int
+lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
+    uint64_t timeout)
+{
+    return _lthread_connect(fd, name, namelen, timeout);
+}
+
+int
+lthread_connect_posix(int fd, struct sockaddr *name, socklen_t namelen)
+{
+    return _lthread_connect(fd, name, namelen, 0);
+}
+
 ssize_t
 lthread_writev(int fd, struct iovec *iov, int iovcnt)
 {
+    LTHREAD_SOCKET_CHECK_SCHED(writev(fd, iov, iovcnt));
     ssize_t total = 0;
     int iov_index = 0;
     struct lthread *lt = lthread_get_sched()->current_lthread;
@@ -456,45 +586,14 @@ lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
 }
 #endif
 
-
-int
-lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-    int i = 0;
+int lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     if (timeout == 0)
         return poll(fds, nfds, 0);
 
+    LTHREAD_SOCKET_CHECK_SCHED(poll(fds, nfds, timeout));
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    /* schedule fd events, pass -1 to avoid yielding */
-    for (i = 0; i < nfds; i++) {
-        if (fds[i].events & POLLIN)
-            _lthread_sched_event(lt, fds[i].fd, LT_EV_READ, -1);
-        else if (fds[i].events & POLLOUT)
-            _lthread_sched_event(lt, fds[i].fd, LT_EV_WRITE, -1);
-        else
-            assert(0);
-    }
+    _lthread_renice(lt); /* doubt if it's necessary */
 
-    lt->ready_fds = 0;
-    lt->fd_wait = -1;
-    /* clear wait_read/write flags set by _lthread_sched_event */
-    lt->state &= CLEARBIT(LT_ST_WAIT_READ);
-    lt->state &= CLEARBIT(LT_ST_WAIT_WRITE);
-    /* we are waiting on multiple fd events */
-    lt->state |= BIT(LT_ST_WAIT_MULTI);
-
-    lt->pollfds = fds;
-    lt->nfds = nfds;
-
-    /* go to sleep until one or more of the fds are ready or until we timeout */
-    _lthread_sched_sleep(lt, (uint64_t)timeout);
-
-    lt->pollfds = NULL;
-    lt->nfds = 0;
-    lt->state &= CLEARBIT(LT_ST_WAIT_MULTI);
-
-    if (lt->state & BIT(LT_ST_EXPIRED))
-        return (0);
-
-    return (lt->ready_fds);
+    return _lthread_sched_events_poll(lt, fds, nfds, timeout);
 }
+

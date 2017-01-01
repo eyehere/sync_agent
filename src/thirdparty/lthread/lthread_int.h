@@ -33,6 +33,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <poll.h>
 #include <pthread.h>
 #include <time.h>
 
@@ -40,11 +41,15 @@
 #include "queue.h"
 #include "tree.h"
 
+#include "cfuhash.h"
+
 #define LT_MAX_EVENTS    (1024)
 #define MAX_STACK_SIZE (128*1024) /* 128k */
 
 #define BIT(x) (1 << (x))
 #define CLEARBIT(x) ~(1 << (x))
+
+#define INVALID_SOCKET(sock) (sock == -1)
 
 struct lthread;
 struct lthread_sched;
@@ -96,8 +101,8 @@ enum lthread_st {
     LT_ST_PENDING_RUNCOMPUTE, /* lthread needs to run in compute sched, step1 */
     LT_ST_RUNCOMPUTE,   /* lthread needs to run in compute sched (2), step2 */
     LT_ST_WAIT_IO_READ, /* lthread waiting for READ IO to finish */
-    LT_ST_WAIT_IO_WRITE,/* lthread waiting for WRITE IO to finish */
-    LT_ST_WAIT_MULTI    /* lthread waiting on multiple fds */
+    LT_ST_WAIT_IO_WRITE, /* lthread waiting for WRITE IO to finish */
+    LT_ST_WAIT_MULTIPLE /* lthread waiting for multiple fds */
 };
 
 struct lthread {
@@ -136,9 +141,10 @@ struct lthread {
     } io;
     /* lthread_compute schduler - when running in compute block */
     struct lthread_compute_sched    *compute_sched;
-    int ready_fds; /* # of fds that are ready. for poll(2) */
-    struct pollfd *pollfds;
-    nfds_t nfds;
+
+    void *multiple_evs; /* pointer set by _lthread_sched_events_poll() */
+    size_t multiple_evs_count; /* number of events in multiple_evs */
+    size_t multiple_evs_ready; /* ready descriptors after lthread_poll() returns */
 };
 
 RB_HEAD(lthread_rb_sleep, lthread);
@@ -179,13 +185,15 @@ struct lthread_sched {
     struct lthread_rb_sleep sleeping;
     /* lthreads waiting on socket io */
     struct lthread_rb_wait  waiting;
+    /* hash table for multiple events per lthread */
+    cfuhash_table_t *waiting_multi;
 };
 
 
 int         sched_create(size_t stack_size);
 
 int         _lthread_resume(struct lthread *lt);
-void _lthread_renice(struct lthread *lt);
+void        _lthread_renice(struct lthread *lt);
 void        _sched_free(struct lthread_sched *sched);
 void        _lthread_del_event(struct lthread *lt);
 
@@ -196,13 +204,16 @@ void        _lthread_sched_sleep(struct lthread *lt, uint64_t msecs);
 void        _lthread_sched_busy_sleep(struct lthread *lt, uint64_t msecs);
 void        _lthread_cancel_event(struct lthread *lt);
 struct lthread* _lthread_desched_event(int fd, enum lthread_event e);
+struct lthread* _lthread_desched_events(int fd, int lt_expired);
 void        _lthread_sched_event(struct lthread *lt, int fd,
-    enum lthread_event e, uint64_t timeout);
+                                 enum lthread_event e, uint64_t timeout);
+int         _lthread_sched_events_poll(struct lthread *lt, struct pollfd *fds,
+                                       nfds_t nfds, int timeout);
 
 int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int         _save_exec_state(struct lthread *lt);
 void        _lthread_compute_add(struct lthread *lt);
-void         _lthread_io_worker_init();
+void        _lthread_io_worker_init();
 
 extern pthread_key_t lthread_sched_key;
 void print_timestamp(char *);
@@ -224,7 +235,7 @@ _lthread_usec_now(void)
 {
     struct timeval t1 = {0, 0};
     gettimeofday(&t1, NULL);
-    return (t1.tv_sec * 1000000) + t1.tv_usec;
+    return (uint64_t) t1.tv_sec * 1000000 + t1.tv_usec;
 }
 
 #endif

@@ -20,9 +20,7 @@
  * 全局变量定义区
  */
 sync_server_t *_server_t = NULL;
-queue_t *conn_queue = NULL;
 int cpu_num = 1;
-lthread_cond_t *conn_cond = NULL;
 
 /**
  * ip_set 释放
@@ -34,20 +32,11 @@ static void ip_set_free(void *ip_set);
  */
 static void client_connection_handler(void *arg);
 
-/**
- * client connection dispatch
- */
-static void client_conn_dispatch(void *arg);
 
 /**
  * accept线程
  */
 static void* server_accept_loop(void *args);
-
-/**
- * connection处理线程
- */
-static void* server_conn_loop(void *args);
 
 
 int sync_server_init()
@@ -66,14 +55,6 @@ int sync_server_init()
 	if ( NULL == _server_t->path_ip_set ) {
 		return 0;
 	}
-
-	conn_queue = queue_create(1024);
-	if ( NULL == conn_queue ) {
-		printf("conn_queue create error.");
-		return 0;
-	}
-
-	assert(lthread_cond_create(&conn_cond) == 0);
 
 	return 1;
 }
@@ -95,7 +76,7 @@ static void client_connection_handler(void *arg)
 	lthread_detach();
 
 	char *buf = NULL;
-	uint64_t ret = 0;
+	int ret = 0;
 	_connection_t *conn = (_connection_t*)arg;
 	char *ip = inet_ntoa(conn->cli_addr.sin_addr);
 	lthread_log(LOG_LEVEL_DEBUG, "ip[%s] fd[%d]", ip, conn->fd);
@@ -106,17 +87,19 @@ static void client_connection_handler(void *arg)
 	}
 	bzero(buf, 1024);
 	ret = lthread_recv(conn->fd, buf, 1024, 0, 5000);
-	if (ret == -2) {
+	if (ret < 0) {
 		goto destroy;
 	}
 	//1.接收健康检查curl
 	//2.接收client的心跳和订阅信息
 	//3.接收客户端的对账信息
-	lthread_send(conn->fd, buf, strlen(buf), 0);
+	char *res = "HTTP/1.0 200 OK\r\nContent-length: 11\r\n\r\nHello Kannan";
+	int sed = lthread_send(conn->fd, res, strlen(res), 0);
 destroy:
 	lthread_close(conn->fd);
+	printf("loop [recv]%d [send]%d \n", ret, sed);
 	free(buf);
-	free(arg);
+	free(conn);
 }
 
 void sync_server_listen( void *arg)
@@ -128,6 +111,9 @@ void sync_server_listen( void *arg)
 	lthread_t *cli_lt = NULL;
 
 	DEFINE_LTHREAD;
+
+	listen(listen_fd, 1024);
+	log_debug("sync_server started,listen on port[%d]", _config->port);
 
 	while (_main_continue) {
 		cli_fd = lthread_accept(listen_fd, (struct sockaddr*)&cli_addr, &addr_len);
@@ -170,10 +156,10 @@ void sync_server_start()
 		log_error("lthread_socket error. listen_fd[%d]", listen_fd);
 		return;
 	}
-	if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt ,sizeof(int)) == -1) {
-		log_error("setsockopt error:set reuseaddr error");
-		return;
-	}
+	//if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt ,sizeof(int)) == -1) {
+		//log_error("setsockopt error:set reuseaddr error");
+		//return;
+	//}
 
 	sin.sin_family      = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
@@ -185,9 +171,14 @@ void sync_server_start()
 		return;
 	}
 
-	listen(listen_fd, 1024);
-	log_debug("sync_server started,listen on port[%d]", _config->port);
+	//listen(listen_fd, 1024);
+	//log_debug("sync_server started,listen on port[%d]", _config->port);
 
+	/*lthread_t *listen_t = NULL;
+		lthread_create(&listen_t, server_accept_loop, &listen_fd);
+		lthread_run();
+	*/
+	//cpu_num=1;
 	while (i++ < cpu_num) {
 		pthread_create(&ths[i], NULL, server_accept_loop, &listen_fd);
 	}

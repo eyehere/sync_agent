@@ -2,7 +2,8 @@ CC				= gcc
 CFLAGS			= 
 LIBS			= -lpthread
 
-OBJS			= lthread_compute.o \
+OBJS			= cfuhash.o \
+				  lthread_compute.o \
 				  lthread_io.o \
 				  lthread_poller.o \
 				  lthread_sched.o \

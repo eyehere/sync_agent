@@ -71,7 +71,7 @@ void    lthread_set_data(void *data);
 lthread_t *lthread_current();
 
 /* socket related functions */
-int     lthread_socket(int, int, int);
+int     lthread_socket(int domain, int type, int protocol);
 int     lthread_pipe(int fildes[2]);
 int     lthread_accept(int fd, struct sockaddr *, socklen_t *);
 int     lthread_close(int fd);
@@ -79,17 +79,22 @@ void    lthread_set_funcname(const char *f);
 uint64_t lthread_id();
 struct lthread* lthread_self(void);
 int     lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
+int     lthread_connect_posix(int fd, struct sockaddr *, socklen_t);
 ssize_t lthread_recv(int fd, void *buf, size_t buf_len, int flags,
     uint64_t timeout);
+ssize_t lthread_recv_posix(int fd, void *buf, size_t length, int flags);
 ssize_t lthread_read(int fd, void *buf, size_t length, uint64_t timeout);
+ssize_t lthread_read_posix(int fd, void *buf, size_t length);
 ssize_t lthread_readline(int fd, char **buf, size_t max, uint64_t timeout);
 ssize_t lthread_recv_exact(int fd, void *buf, size_t buf_len, int flags,
     uint64_t timeout);
 ssize_t lthread_read_exact(int fd, void *buf, size_t length, uint64_t timeout);
 ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags,
     uint64_t timeout);
+ssize_t lthread_recvmsg_posix(int fd, struct msghdr *message, int flags);
 ssize_t lthread_recvfrom(int fd, void *buf, size_t length, int flags,
     struct sockaddr *address, socklen_t *address_len, uint64_t timeout);
+ssize_t lthread_recvfrom_posix(int fd, void *buf, size_t length, int flags);
 
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
 ssize_t lthread_write(int fd, const void *buf, size_t buf_len);
@@ -103,12 +108,19 @@ int     lthread_wait_write(int fd, int timeout_ms);
 int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
     struct sf_hdtr *hdtr);
 #endif
+int lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
 ssize_t lthread_io_write(int fd, void *buf, size_t nbytes);
 ssize_t lthread_io_read(int fd, void *buf, size_t nbytes);
-int lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 
 int lthread_compute_begin(void);
 void lthread_compute_end(void);
+
+void lthread_freeze(void);
+void lthread_unfreeze(struct lthread *lt);
+
+void lthread_print_timestamp(const char *msg);
+
 #ifdef __cplusplus
 }
 #endif
