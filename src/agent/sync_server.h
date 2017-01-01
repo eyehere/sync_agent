@@ -29,28 +29,29 @@ typedef struct _sync_server_t {
 extern sync_server_t *_server_t;
 
 /**
- * sync_server启动
+ *        Name: sync_server_start
+ * Description: server模式启动
+ *   Parameter:
+ *      Return:
+ *
  */
 void sync_server_start();
 
 /**
- * sync_server 监听程序
- * client 自动发现 & 接受同步文件请求
- */
-void sync_server_listen(void *arg);
-
-/**
- * sync_server 监控对应的目录的文件变化
- */
-void sync_server_watch(void *arg);
-
-/**
- * sync_server 初始化
+ *        Name: sync_server_init
+ * Description: sync_server 初始化
+ *   Parameter:
+ *      Return:
+ *
  */
 int sync_server_init();
 
 /**
- * sync_server 销毁
+ *        Name: sync_server_destory
+ * Description: sync_server 销毁
+ *   Parameter:
+ *      Return:
+ *
  */
 void sync_server_destroy();
 

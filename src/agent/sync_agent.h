@@ -37,13 +37,20 @@ extern int 	_main_continue;
 extern char	*_config_file;
 extern sync_config_t *_config;
 
+/**
+ * 客户端连接
+ */
 typedef struct _connection_s {
 	struct sockaddr_in cli_addr;
 	int fd;
 } _connection_t;
 
 /**
- * 日志函数封装
+ *        Name: lthread_log
+ * Description: lthread里通过这个函数写日志 不要在lthread里做阻塞调用
+ *   Parameter: log_level -> log level.
+ *   Parameter: fmt -> log fmt.
+ *      Return:
  */
 void lthread_log(int log_level, const char *fmt, ...);
 

@@ -26,14 +26,66 @@ sync_config_t *_config 	= NULL;
 /**
  * 静态函数申明区
  */
+
+/**
+ *        Name: show_help
+ * Description: 显示软件的使用帮助信息
+ *   Parameter: program
+ *      Return:
+ */
 static void show_help(const char *program);
+
+/**
+ *        Name: show_version
+ * Description: 显示软件的版本信息
+ *   Parameter: program
+ *      Return:
+ */
 static void show_version(const char *program);
+
+/**
+ *        Name: parse_args
+ * Description: 解析启动时候传入的参数
+ *   Parameter: program
+ *      Return:
+ */
 static int parse_args(int argc, char **argv);
+
+/**
+ *        Name: create_daemon_process
+ * Description: 创建守护进程
+ *      Return:
+ */
 static int create_daemon_process();
+
+/**
+ *        Name: install_signal
+ * Description: 注册信号处理
+ *      Return:
+ */
 static int  install_signals(void);
+
+/**
+ *        Name: signal_handle
+ * Description: 信号回调函数
+ *   Parameter: program
+ *      Return:
+ */
 static void signal_handle(int signum);
+
+/**
+ *        Name: sync_server_run
+ * Description: 以server模式启动sync_agent
+ *      Return:
+ */
 static void sync_server_run();
-static void synv_client_run();
+
+/**
+ *        Name: sync_client_run
+ * Description: 以client模式启动sync_agent
+ *      Return:
+ */
+static void sync_client_run();
 
 void lthread_log(int log_level, const char *fmt, ...)
 {
@@ -47,7 +99,7 @@ void lthread_log(int log_level, const char *fmt, ...)
 	va_start(vl, fmt);
 	line_size = vsnprintf(line_buffer, sizeof(line_buffer) - 2, fmt, vl);
 	if(line_size <= 0){
-		return;
+		goto end;
 	}
 	va_end(vl);
 
@@ -59,8 +111,11 @@ void lthread_log(int log_level, const char *fmt, ...)
 
 	log_by_level(log_level, line_buffer);
 
+end:
 	lthread_compute_end();
+	return;
 }
+
 static void show_help(const char *program)
 {
 	printf("Usage: %s [-c config_file]\n", program);
@@ -175,12 +230,16 @@ static int create_daemon_process()
 }
 
 static int install_signals(void){
+	if(SIG_ERR == signal(SIGTERM, signal_handle)){
+		log_error("Install SIGTERM fails.");
+		return 0;
+	}
+	if(SIG_ERR == signal(SIGUSR1, signal_handle)){
+		log_error("Install SIGUSR1 fails.");
+		return 0;
+	}
     if(SIG_ERR == signal(SIGINT, signal_handle)){
         log_error("Install SIGINT fails.");
-        return 0;
-    }
-    if(SIG_ERR == signal(SIGTERM, signal_handle)){
-        log_error("Install SIGTERM fails.");
         return 0;
     }
     if(SIG_ERR == signal(SIGSEGV, signal_handle)){
@@ -208,8 +267,8 @@ static void signal_handle(int signum){
         log_info("recv termination kill signal, sync_agent will exit normally.");
         _main_continue = 0;
     }
-    else if(SIGKILL == signum){
-        log_info("recv kill signal, sync_agent will exit normally.");
+    else if(SIGUSR1 == signum){
+        log_info("recv SIGUSR1 signal, sync_agent will exit normally.");
         _main_continue = 0;
     }
     else if(SIGINT == signum){
@@ -234,7 +293,7 @@ static void sync_server_run()
 
 static void sync_client_run()
 {
-	printf("client\n");
+	printf("client todo ...\n");
 }
 
 int main(int argc, char **argv)
@@ -279,8 +338,8 @@ int main(int argc, char **argv)
 		sync_client_run();
 	}
 	else {
-		printf("sync_agent run mode is server or client,please check.\n");
-		printf("local ip:%s\n", ip);
+		log_error("sync_agent run mode is server or client,please check.\n");
+		log_error("local ip:%s\n", ip);
 	}
 
 	return 0;

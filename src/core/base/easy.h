@@ -20,7 +20,7 @@
 
 #include "elog.h"
 //#include "emem_pool.h"
-//#include "ememory.h"
+#include "ememory.h"
 //#include "ebuffer.h"
 //#include "enetwork.h"
 #include "eother.h"
